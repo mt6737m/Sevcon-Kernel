@@ -16,7 +16,7 @@ on:
 
 env:
   KERNEL_REPO: https://github.com/LineageOS/android_kernel_amlogic_kernel-5.15
-  KERNEL_NAME: Sevcon-Kernel
+  KERNEL_NAME: SevconKernel
   # build.config.constants в репозитории ядра: CLANG_VERSION=r487747c
   CLANG_VERSION: r487747c
 
@@ -30,6 +30,16 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           sudo docker image prune -af || true
           df -h /
+
+      - name: Add swap (линковка vmlinux с LTO не влезает в 16 ГБ ОЗУ)
+        run: |
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile
+          sudo fallocate -l 10G /mnt/swapfile
+          sudo chmod 600 /mnt/swapfile
+          sudo mkswap /mnt/swapfile
+          sudo swapon /mnt/swapfile
+          free -h
 
       - name: Install dependencies
         run: |
@@ -110,7 +120,8 @@ jobs:
 
           # Имя ядра + KernelSU (хуки через kprobes)
           scripts/config --file out/.config \
-            --set-str LOCALVERSION "-${KERNEL_NAME}" -d LOCALVERSION_AUTO
+            --set-str LOCALVERSION "-${KERNEL_NAME}" -d LOCALVERSION_AUTO \
+            -d DEBUG_INFO_BTF_MODULES -d DEBUG_INFO_BTF
           if [ "$WITH_KSU" = "true" ]; then
             scripts/config --file out/.config -e KPROBES -e KPROBE_EVENTS -e KSU
           fi
@@ -121,7 +132,8 @@ jobs:
             grep -q '^CONFIG_KSU=y' out/.config || { echo "::error::CONFIG_KSU не включился"; exit 1; }
           fi
 
-          make -j1 "${MAKE_ARGS[@]}" DTC_FLAGS="-@" Image Image.gz dtbs modules
+          make -j"$(nproc)" "${MAKE_ARGS[@]}" DTC_FLAGS="-@" Image Image.gz dtbs modules \
+            || make -j1 "${MAKE_ARGS[@]}" DTC_FLAGS="-@" Image Image.gz dtbs modules
 
           # build.config.amlogic: Image.lz4 без legacy-флага (-l), иначе u-boot не распакует
           lz4 -f -12 --favor-decSpeed out/arch/arm64/boot/Image out/arch/arm64/boot/Image.lz4
