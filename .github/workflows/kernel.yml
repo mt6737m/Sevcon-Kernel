@@ -121,7 +121,7 @@ jobs:
             grep -q '^CONFIG_KSU=y' out/.config || { echo "::error::CONFIG_KSU не включился"; exit 1; }
           fi
 
-          make -j"$(nproc)" "${MAKE_ARGS[@]}" DTC_FLAGS="-@" Image Image.gz dtbs modules
+          make -j1 "${MAKE_ARGS[@]}" DTC_FLAGS="-@" Image Image.gz dtbs modules
 
           # build.config.amlogic: Image.lz4 без legacy-флага (-l), иначе u-boot не распакует
           lz4 -f -12 --favor-decSpeed out/arch/arm64/boot/Image out/arch/arm64/boot/Image.lz4
